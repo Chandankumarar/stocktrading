@@ -1,0 +1,10 @@
+# Ignore node modules everywhere
+node_modules/
+
+# Ignore only public folder inside client
+client/public/
+client/node_modules
+
+erskamleDesktopcrud
+node_modules/
+server/node_modules/
