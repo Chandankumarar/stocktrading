@@ -2,11 +2,11 @@
 -- Run this script in your MySQL database to set up the required tables
 
 -- Create database (uncomment if needed)
--- CREATE DATABASE IF NOT EXISTS stockdb;
--- USE stockdb;
+ CREATE DATABASE IF NOT EXISTS stockdb;
+ USE stockdb;
 
 -- Users table for authentication
-/*CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
@@ -35,7 +35,19 @@ CREATE TABLE IF NOT EXISTS portfolio (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (stock_id) REFERENCES stocks(id) ON DELETE CASCADE,
     UNIQUE KEY unique_user_stock (user_id, stock_id)
-);*/
+);
+
+-- Applications table for companies requesting listing approval
+CREATE TABLE IF NOT EXISTS applications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    company_name VARCHAR(150) NOT NULL,
+    price DECIMAL(10,2) NOT NULL,
+    sellername VARCHAR(100) NOT NULL,
+    description TEXT,
+    status ENUM('pending','accepted','rejected') DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
 
 
 -- Insert sample admin user (password: admin123)
@@ -58,17 +70,19 @@ INSERT IGNORE INTO stocks (stockname, price, sellername, description) VALUES
 ('NVIDIA Corp.', 800.00, 'TechCorp', 'Graphics processing unit and AI computing company');
 
 -- Create indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
-CREATE INDEX IF NOT EXISTS idx_users_token ON users(token);
-CREATE INDEX IF NOT EXISTS idx_stocks_name ON stocks(stockname);
-CREATE INDEX IF NOT EXISTS idx_stocks_seller ON stocks(sellername);
-CREATE INDEX IF NOT EXISTS idx_portfolio_user ON portfolio(user_id);
-CREATE INDEX IF NOT EXISTS idx_portfolio_stock ON portfolio(stock_id);
+CREATE INDEX idx_users_username ON users(username);
+CREATE INDEX idx_users_token ON users(token);
+CREATE INDEX idx_stocks_name ON stocks(stockname);
+CREATE INDEX idx_stocks_seller ON stocks(sellername);
+CREATE INDEX idx_portfolio_user ON portfolio(user_id);
+CREATE INDEX idx_portfolio_stock ON portfolio(stock_id);
+CREATE INDEX idx_applications_status ON applications(status);
 
 -- Show table structures
 DESCRIBE users;
 DESCRIBE stocks;
 DESCRIBE portfolio;
+DESCRIBE applications;
 
 -- Show sample data
 SELECT 'Users:' as Table_Name;
@@ -79,3 +93,5 @@ SELECT id, stockname, price, sellername FROM stocks LIMIT 5;
 
 SELECT 'Portfolio:' as Table_Name;
 SELECT COUNT(*) as total_portfolio_entries FROM portfolio;
+SELECT 'Applications:' as Table_Name;
+SELECT id, company_name, price, sellername, status, created_at FROM applications;

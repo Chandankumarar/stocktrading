@@ -19,7 +19,7 @@ app.use((req, res, next) => {
 const db = mysql.createPool({
   host: 'localhost',
   user: 'root',
-  password: '@Kamlesh007',
+  password: 'chandan@2005',
   database: 'stockdb',
   waitForConnections: true,
   connectionLimit: 10,
@@ -75,7 +75,7 @@ app.post('/api/login', async (req, res) => {
   if (!username || !password) return res.status(400).json({ message: 'Username & password required' });
 
   try {
-    const [rows] = await db.query('SELECT id, role, token FROM users WHERE username=? AND password=?', [
+    const [rows] = await db.query('SELECT id, role, token, username FROM users WHERE username=? AND password=?', [
       username,
       password,
     ]);
@@ -85,6 +85,88 @@ app.post('/api/login', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Login failed' });
+  }
+});
+
+// ---------------- Applications Routes ----------------
+// Public: submit a new application
+app.post('/api/applications', async (req, res) => {
+  const { company_name, price, sellername, description } = req.body;
+  if (!company_name || !price || !sellername) {
+    return res.status(400).json({ message: 'Company name, price, seller name required' });
+  }
+  try {
+    const [result] = await db.query(
+      'INSERT INTO applications (company_name, price, sellername, description, status) VALUES (?, ?, ?, ?, "pending")',
+      [company_name, price, sellername, description || '']
+    );
+    res.json({ message: 'Application submitted', id: result.insertId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to submit application' });
+  }
+});
+
+// Admin: list applications (optionally filter by status)
+app.get('/api/admin/applications', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin only' });
+  const { status } = req.query;
+  try {
+    let query = 'SELECT * FROM applications';
+    const params = [];
+    if (status) {
+      query += ' WHERE status=?';
+      params.push(status);
+    }
+    query += ' ORDER BY created_at DESC';
+    const [rows] = await db.query(query, params);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to fetch applications' });
+  }
+});
+
+// Admin: accept application -> create stock entry and mark accepted
+app.post('/api/admin/applications/:id/accept', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin only' });
+  const id = req.params.id;
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [apps] = await conn.query('SELECT * FROM applications WHERE id=? AND status="pending" FOR UPDATE', [id]);
+    if (apps.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ message: 'Application not found or already processed' });
+    }
+    const app = apps[0];
+    const [result] = await conn.query(
+      'INSERT INTO stocks (stockname, price, sellername, description) VALUES (?, ?, ?, ?)',
+      [app.company_name, app.price, app.sellername, app.description || '']
+    );
+    await conn.query('UPDATE applications SET status="accepted" WHERE id=?', [id]);
+    await conn.commit();
+    res.json({ message: 'Application accepted', stockId: result.insertId });
+  } catch (err) {
+    await conn.rollback();
+    console.error(err);
+    res.status(500).json({ message: 'Failed to accept application' });
+  } finally {
+    conn.release();
+  }
+});
+
+// Admin: reject application
+app.post('/api/admin/applications/:id/reject', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin only' });
+  const id = req.params.id;
+  try {
+    const [result] = await db.query('UPDATE applications SET status="rejected" WHERE id=? AND status="pending"', [id]);
+    if (result.affectedRows === 0) return res.status(404).json({ message: 'Application not found or already processed' });
+    res.json({ message: 'Application rejected' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to reject application' });
   }
 });
 
@@ -178,11 +260,11 @@ app.get('/api/stocks', authMiddleware, async (req, res) => {
   }
 });
 
-// Portfolio table structure assumed: id, user_id, stock_id, purchase_date
+// Portfolio table structure assumed: id, user_id, stock_id, purchase_price, purchase_date
 app.get('/api/portfolio', authMiddleware, async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT p.id, p.stock_id, s.stockname, s.price, s.sellername, s.description, p.purchase_date
+      `SELECT p.id, p.stock_id, p.purchase_price, s.stockname, s.price as current_price, s.sellername, s.description, p.purchase_date
        FROM portfolio p
        JOIN stocks s ON p.stock_id = s.id
        WHERE p.user_id=?`,
@@ -206,9 +288,10 @@ app.post('/api/buy/:id', authMiddleware, async (req, res) => {
     const [existingRows] = await db.query('SELECT * FROM portfolio WHERE user_id=? AND stock_id=?', [req.user.id, stockId]);
     if (existingRows.length > 0) return res.status(400).json({ message: 'You already own this stock' });
 
-    await db.query('INSERT INTO portfolio (user_id, stock_id, purchase_date) VALUES (?, ?, NOW())', [
+    await db.query('INSERT INTO portfolio (user_id, stock_id, purchase_price, purchase_date) VALUES (?, ?, ?, NOW())', [
       req.user.id,
       stockId,
+      stockRows[0].price,
     ]);
 
     res.json({ message: 'Stock bought successfully', stockname: stockRows[0].stockname });
@@ -229,6 +312,51 @@ app.delete('/api/portfolio/:id', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Failed to sell stock' });
+  }
+});
+
+// Admin: Get stock analytics - how many users bought each stock
+app.get('/api/admin/stocks/:id/analytics', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin only' });
+  
+  try {
+    // Get stock summary
+    const [summaryRows] = await db.query(
+      `SELECT 
+         s.id, s.stockname, s.price, s.sellername,
+         COUNT(p.id) as total_buyers,
+         AVG(p.purchase_price) as avg_purchase_price,
+         MIN(p.purchase_price) as min_purchase_price,
+         MAX(p.purchase_price) as max_purchase_price
+       FROM stocks s
+       LEFT JOIN portfolio p ON s.id = p.stock_id
+       WHERE s.id = ?
+       GROUP BY s.id, s.stockname, s.price, s.sellername`,
+      [req.params.id]
+    );
+    
+    if (summaryRows.length === 0) return res.status(404).json({ message: 'Stock not found' });
+    
+    // Get detailed buyer information
+    const [buyerRows] = await db.query(
+      `SELECT 
+         u.username, p.purchase_price, p.purchase_date
+       FROM portfolio p
+       JOIN users u ON p.user_id = u.id
+       WHERE p.stock_id = ?
+       ORDER BY p.purchase_date DESC`,
+      [req.params.id]
+    );
+    
+    const result = {
+      ...summaryRows[0],
+      buyers: buyerRows
+    };
+    
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to fetch stock analytics' });
   }
 });
 
