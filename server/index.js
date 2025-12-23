@@ -173,17 +173,17 @@ app.post('/api/admin/applications/:id/reject', authMiddleware, async (req, res) 
 // ---------------- Admin Routes ----------------
 app.get('/api/admin/stocks', authMiddleware, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin only' });
-  
+
   const { search } = req.query;
   try {
     let query = 'SELECT * FROM stocks';
     let params = [];
-    
+
     if (search) {
       query += ' WHERE stockname LIKE ? OR sellername LIKE ?';
       params = [`%${search}%`, `%${search}%`];
     }
-    
+
     const [stocks] = await db.query(query, params);
     res.json(stocks);
   } catch (err) {
@@ -205,6 +205,9 @@ app.post('/api/admin/stocks', authMiddleware, async (req, res) => {
     );
     res.json({ message: 'Stock added', id: result.insertId });
   } catch (err) {
+    if (err.sqlState === '45000') {
+      return res.status(400).json({ message: err.message });
+    }
     console.error(err);
     res.status(500).json({ message: 'Failed to add stock' });
   }
@@ -246,12 +249,12 @@ app.get('/api/stocks', authMiddleware, async (req, res) => {
   try {
     let query = 'SELECT * FROM stocks';
     let params = [];
-    
+
     if (search) {
       query += ' WHERE stockname LIKE ? OR sellername LIKE ?';
       params = [`%${search}%`, `%${search}%`];
     }
-    
+
     const [stocks] = await db.query(query, params);
     res.json(stocks);
   } catch (err) {
@@ -283,7 +286,7 @@ app.post('/api/buy/:id', authMiddleware, async (req, res) => {
     // Check if stock exists
     const [stockRows] = await db.query('SELECT * FROM stocks WHERE id=?', [stockId]);
     if (stockRows.length === 0) return res.status(404).json({ message: 'Stock not found' });
-    
+
     // Check if user already owns this stock
     const [existingRows] = await db.query('SELECT * FROM portfolio WHERE user_id=? AND stock_id=?', [req.user.id, stockId]);
     if (existingRows.length > 0) return res.status(400).json({ message: 'You already own this stock' });
@@ -318,7 +321,7 @@ app.delete('/api/portfolio/:id', authMiddleware, async (req, res) => {
 // Admin: Get stock analytics - how many users bought each stock
 app.get('/api/admin/stocks/:id/analytics', authMiddleware, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin only' });
-  
+
   try {
     // Get stock summary
     const [summaryRows] = await db.query(
@@ -334,9 +337,9 @@ app.get('/api/admin/stocks/:id/analytics', authMiddleware, async (req, res) => {
        GROUP BY s.id, s.stockname, s.price, s.sellername`,
       [req.params.id]
     );
-    
+
     if (summaryRows.length === 0) return res.status(404).json({ message: 'Stock not found' });
-    
+
     // Get detailed buyer information
     const [buyerRows] = await db.query(
       `SELECT 
@@ -347,12 +350,12 @@ app.get('/api/admin/stocks/:id/analytics', authMiddleware, async (req, res) => {
        ORDER BY p.purchase_date DESC`,
       [req.params.id]
     );
-    
+
     const result = {
       ...summaryRows[0],
       buyers: buyerRows
     };
-    
+
     res.json(result);
   } catch (err) {
     console.error(err);

@@ -292,6 +292,7 @@ const AdminDashboard = ({ auth, navigate }) => {
   const [selectedStockAnalytics, setSelectedStockAnalytics] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [selectedStockId, setSelectedStockId] = useState(null);
+  const [addStockError, setAddStockError] = useState("");
 
   const [formData, setFormData] = useState({
     stockname: "",
@@ -356,6 +357,7 @@ const AdminDashboard = ({ auth, navigate }) => {
 
   const handleAddStock = async (e) => {
     e.preventDefault();
+    setAddStockError("");
     try {
       const res = await fetch(`${API_BASE}/admin/stocks`, {
         method: "POST",
@@ -377,10 +379,10 @@ const AdminDashboard = ({ auth, navigate }) => {
         setShowAddForm(false);
         fetchStocks();
       } else {
-        alert(data.message);
+        setAddStockError(data.message || "Failed to add stock");
       }
     } catch {
-      alert("Network error: Could not add stock.");
+      setAddStockError("Network error: Could not add stock.");
     }
   };
 
@@ -614,6 +616,7 @@ const AdminDashboard = ({ auth, navigate }) => {
                   rows="3"
                 />
               </div>
+              {addStockError && <MessageBox type="error">{addStockError}</MessageBox>}
               <div className="form-actions">
                 <button type="submit" className="btn btn-primary">
                   Add Stock
@@ -782,9 +785,8 @@ const AdminDashboard = ({ auth, navigate }) => {
         {stocks.map((stock) => (
           <div key={stock.id} className="stock-card-container">
             <div
-              className={`stock-card ${
-                selectedStockId === stock.id ? "selected" : ""
-              }`}
+              className={`stock-card ${selectedStockId === stock.id ? "selected" : ""
+                }`}
               style={{ cursor: "pointer" }}
               onClick={() => fetchStockAnalytics(stock.id)}
             >
@@ -1100,9 +1102,8 @@ const UserDashboard = ({ auth, navigate }) => {
                       <div className="price-container">
                         <span className="price">${currentPrice}</span>
                         <span
-                          className={`price-change ${
-                            isProfit ? "profit" : "loss"
-                          }`}
+                          className={`price-change ${isProfit ? "profit" : "loss"
+                            }`}
                         >
                           {isProfit ? "+" : ""}${priceChange.toFixed(2)} (
                           {isProfit ? "+" : ""}

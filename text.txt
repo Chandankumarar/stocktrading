@@ -1,0 +1,13 @@
+//triger in workbench
+
+INSERT INTO stocks (stockname, price, sellername, description) 
+VALUES ('infosys', 750.50, 'infosys found', 'tech');
+
+//
+cd server
+npm start
+
+//
+cd client
+npm run dev
+
