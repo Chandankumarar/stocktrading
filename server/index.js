@@ -1,15 +1,30 @@
 const express = require('express');
 const cors = require('cors');
-const bodyParser = require('body-parser');
 const mysql = require('mysql2/promise');
 const crypto = require('crypto');
+const { promisify } = require('util');
+const scrypt = promisify(crypto.scrypt);
 
 const app = express();
-const PORT = 8000;
+const PORT = Number(process.env.PORT || 8000);
+
+async function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = await scrypt(password, salt, 64);
+  return `scrypt:${salt}:${hash.toString('hex')}`;
+}
+
+async function verifyPassword(password, stored) {
+  if (!stored || !stored.startsWith('scrypt:')) return false;
+  const [, salt, expectedHex] = stored.split(':');
+  if (!salt || !expectedHex || !/^[0-9a-f]{128}$/i.test(expectedHex)) return false;
+  const actual = await scrypt(password, salt, 64);
+  return crypto.timingSafeEqual(actual, Buffer.from(expectedHex, 'hex'));
+}
 
 // ---------------- Middleware ----------------
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
   next();
@@ -17,10 +32,10 @@ app.use((req, res, next) => {
 
 // ---------------- Database ----------------
 const db = mysql.createPool({
-  host: 'localhost',
-  user: 'root',
-  password: 'chandan@2005',
-  database: 'stockdb',
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME || 'stockdb',
   waitForConnections: true,
   connectionLimit: 10,
 });
@@ -48,22 +63,20 @@ app.get('/api/health', (req, res) => {
 });
 
 app.post('/api/register', async (req, res) => {
-  const { username, password, role } = req.body;
-  if (!username || !password) return res.status(400).json({ message: 'Username & password required' });
+  const { username, password } = req.body;
+  if (typeof username !== 'string' || typeof password !== 'string' || !username.trim() || password.length < 8)
+    return res.status(400).json({ message: 'Username and password of at least 8 characters required' });
 
   try {
     const [rows] = await db.query('SELECT * FROM users WHERE username=?', [username]);
     if (rows.length > 0) return res.status(400).json({ message: 'Username exists' });
 
     const token = `token-${crypto.randomUUID()}`;
-    const userRole = role || 'user';
+    const passwordHash = await hashPassword(password);
     await db.query('INSERT INTO users (username, password, role, token) VALUES (?, ?, ?, ?)', [
-      username,
-      password,
-      userRole,
-      token,
+      username.trim(), passwordHash, 'user', token,
     ]);
-    res.json({ message: 'User registered', token, role: userRole });
+    res.json({ message: 'User registered', token, role: 'user' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Registration failed' });
@@ -75,13 +88,11 @@ app.post('/api/login', async (req, res) => {
   if (!username || !password) return res.status(400).json({ message: 'Username & password required' });
 
   try {
-    const [rows] = await db.query('SELECT id, role, token, username FROM users WHERE username=? AND password=?', [
-      username,
-      password,
-    ]);
-    if (rows.length === 0) return res.status(401).json({ message: 'Invalid credentials' });
-
-    res.json(rows[0]);
+    const [rows] = await db.query('SELECT id, role, token, username, password FROM users WHERE username=?', [username]);
+    if (rows.length === 0 || !(await verifyPassword(password, rows[0].password)))
+      return res.status(401).json({ message: 'Invalid credentials' });
+    const { password: _passwordHash, ...user } = rows[0];
+    res.json(user);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Login failed' });
