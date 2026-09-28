@@ -8,3 +8,9 @@ client/node_modules
 erskamleDesktopcrud
 node_modules/
 server/node_modules/
+
+# Local secrets
+.env
+.env.*
+!.env.example
+server/.env
