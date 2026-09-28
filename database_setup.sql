@@ -1,7 +1,7 @@
 -- Stock Trading Platform Database Setup
 -- Run this script in your MySQL database to set up the required tables
 
--- Create database (uncomment if needed)
+-- Create database if needed
  CREATE DATABASE IF NOT EXISTS stockdb;
  USE stockdb;
 
@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS portfolio (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     stock_id INT NOT NULL,
+    purchase_price DECIMAL(10,2) NOT NULL,
     purchase_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (stock_id) REFERENCES stocks(id) ON DELETE CASCADE,
@@ -50,13 +51,7 @@ CREATE TABLE IF NOT EXISTS applications (
 );
 
 
--- Insert sample admin user (password: admin123)
-INSERT IGNORE INTO users (username, password, role, token) VALUES 
-('admin', 'admin123', 'admin', 'admin_token_123');
-
--- Insert sample regular user (password: user123)
-INSERT IGNORE INTO users (username, password, role, token) VALUES 
-('user', 'user123', 'user', 'user_token_123');
+-- No default accounts are created. Use server/scripts/create-admin.js for a local admin.
 
 -- Insert sample stocks
 INSERT IGNORE INTO stocks (stockname, price, sellername, description) VALUES 
@@ -70,13 +65,6 @@ INSERT IGNORE INTO stocks (stockname, price, sellername, description) VALUES
 ('NVIDIA Corp.', 800.00, 'TechCorp', 'Graphics processing unit and AI computing company');
 
 -- Create indexes for better performance
-CREATE INDEX idx_users_username ON users(username);
-CREATE INDEX idx_users_token ON users(token);
-CREATE INDEX idx_stocks_name ON stocks(stockname);
-CREATE INDEX idx_stocks_seller ON stocks(sellername);
-CREATE INDEX idx_portfolio_user ON portfolio(user_id);
-CREATE INDEX idx_portfolio_stock ON portfolio(stock_id);
-CREATE INDEX idx_applications_status ON applications(status);
 
 -- Show table structures
 DESCRIBE users;
