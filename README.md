@@ -1,64 +1,48 @@
-
 # Stock Trading Platform
 
-A full-stack educational stock trading application built using React.js, Node.js, Express.js and MySQL.
+An AI-assisted educational full-stack stock trading application built with React, Node.js, Express, and MySQL. It simulates stock listings, purchases, sales, and portfolio management; **it does not execute real trades**.
 
-The application provides separate user and admin interfaces. Users can browse available stocks, buy and sell stocks, and manage their portfolios. Administrators can add, edit and delete stock listings.
+## Features
+
+- User registration and login with scrypt password hashing
+- Stock search, simulated purchases and sales, and portfolio tracking
+- Admin stock management and stock purchase analytics
+- Company listing applications with admin approval and rejection
+- REST APIs and relational database integration
 
 ## Tech Stack
 
-- Frontend: React.js, CSS
-- Backend: Node.js, Express.js
+- Frontend: React, CSS, Vite
+- Backend: Node.js, Express
 - Database: MySQL
-- API: REST
 
-## Key Features
-
-- User registration and login
-- Role-based user and admin interfaces
-- Stock browsing and search
-- Buying and selling workflows
-- Portfolio management
-- Administrative stock management
-
-## Development
-
-This project was developed with AI assistance as a learning project. It demonstrates full-stack application structure, API integration and relational database usage.
-
-It is intended for educational use and is not a production trading application.
-  
 ## Local Setup
 
-### Prerequisites
-
-- Node.js
-- MySQL Server
-- Git
-
-### Clone the repository
+Requires Node.js, MySQL, and Git.
 
 ```bash
 git clone https://github.com/Chandankumarar/stocktrading.git
 cd stocktrading
+mysql -u root -p < database_setup.sql
 ```
 
-### Database
+The SQL script creates `stockdb`, tables, and sample stocks. It does **not** create default user or admin accounts. For an existing database created using an older version, back up your data and add the missing portfolio purchase price column if necessary:
 
-Create the `stockdb` database and import the supplied setup script.
-
-```bash
-mysql -u root -p stockdb < database_setup.sql
+```sql
+ALTER TABLE portfolio ADD COLUMN purchase_price DECIMAL(10,2) NOT NULL DEFAULT 0;
 ```
 
-### Backend
+In `server`, create a local `.env` file based on `server/.env.example` and set your own database credentials. Node.js 20+ supports `--env-file`:
 
 ```bash
 cd server
+cp .env.example .env
 npm install
-npm start
+node --env-file=.env scripts/create-admin.js
+node --env-file=.env index.js
 ```
 
-### Frontend
+For the admin setup command, set `ADMIN_USERNAME` and `ADMIN_PASSWORD` in your local `.env` file first. The script creates or resets a local admin account; never commit real credentials.
 
 Open a second terminal:
 
@@ -68,22 +52,27 @@ npm install
 npm run dev
 ```
 
-The documented default development ports are 8000 for the backend and 5173 for the frontend.
-  
-## Security Notice
+The backend defaults to http://localhost:8000 and Vite commonly serves the frontend at http://localhost:5173. Public registration creates standard user accounts only; admin accounts are provisioned using the local setup script.
 
-This is an educational application, not a production-ready financial platform.
+**Existing users:** Accounts created by the earlier version stored plaintext passwords and cannot log in with the new hashed-password authentication. Back up existing data, remove or migrate those accounts securely, and recreate development accounts. Previously issued tokens should be invalidated.
 
-The authentication implementation requires additional security hardening before real-world deployment.
+## API Overview
 
-Recommended improvements:
+- `POST /api/register`, `POST /api/login`
+- `GET /api/stocks`, `POST /api/buy/:id`, `GET /api/portfolio`, `DELETE /api/portfolio/:id`
+- `POST /api/applications`
+- `GET /api/admin/applications`, `POST /api/admin/applications/:id/accept`, `POST /api/admin/applications/:id/reject`
+- `GET /api/admin/stocks`, `POST /api/admin/stocks`, `PUT /api/admin/stocks/:id`, `DELETE /api/admin/stocks/:id`
+- `GET /api/admin/stocks/:id/analytics`
 
-- Hash passwords using a suitable password-hashing algorithm.
-- Remove default credentials and secrets from source code.
-- Store configuration secrets in environment variables.
-- Review token generation and validation.
-- Add automated authentication and authorization tests.
-- Review input validation and database access controls.
+Protected endpoints require `Authorization: Bearer <token>`; admin endpoints additionally check the account role.
 
-Do not use real financial information or reuse personal account passwords when testing this project.
-  
+## Security and Limitations
+
+This is a learning project, **not a production-ready financial platform**. Passwords for newly registered accounts use scrypt and a per-user random salt; the database password is supplied through environment variables; public registration cannot grant admin privileges. Tokens are still stored in the database without expiration or rotation, and other security controls such as rate limiting, comprehensive validation, CSRF review, and automated security tests remain future work.
+
+The old repository history contained a hardcoded database credential and example accounts. **Rotate any real or reused database password and invalidate old tokens**; deleting them from current files does not erase Git history. Never use real financial information in this demo.
+
+## Development
+
+Built with AI assistance as an educational project. Features and setup should be tested locally before deployment.
