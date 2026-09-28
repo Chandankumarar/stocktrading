@@ -38,11 +38,16 @@ In `server`, create a local `.env` file based on `server/.env.example` and set y
 cd server
 cp .env.example .env
 npm install
-node --env-file=.env scripts/create-admin.js
 node --env-file=.env index.js
 ```
 
-For the admin setup command, set `ADMIN_USERNAME` and `ADMIN_PASSWORD` in your local `.env` file first. The script creates or resets a local admin account; never commit real credentials.
+To create a local admin, register a standard user through the app first, then run this SQL **only on your own development database** (replace the example username):
+
+```sql
+UPDATE users SET role = 'admin' WHERE username = 'your-local-admin-username';
+```
+
+Log out and log back in to load the updated role. Never promote accounts from public requests.
 
 Open a second terminal:
 
@@ -52,7 +57,7 @@ npm install
 npm run dev
 ```
 
-The backend defaults to http://localhost:8000 and Vite commonly serves the frontend at http://localhost:5173. Public registration creates standard user accounts only; admin accounts are provisioned using the local setup script.
+The backend defaults to http://localhost:8000 and Vite commonly serves the frontend at http://localhost:5173. Public registration creates standard user accounts only; local admins are promoted explicitly in the development database.
 
 **Existing users:** Accounts created by the earlier version stored plaintext passwords and cannot log in with the new hashed-password authentication. Back up existing data, remove or migrate those accounts securely, and recreate development accounts. Previously issued tokens should be invalidated.
 
